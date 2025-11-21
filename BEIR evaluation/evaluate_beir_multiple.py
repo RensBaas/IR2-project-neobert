@@ -125,11 +125,11 @@ def evaluate_model_on_dataset(model_name, model_path, dataset_name, trust_remote
 
 # Datasets to evaluate on
 datasets = [
-    "scifact",  # 5K docs - scientific
-    "nfcorpus",  # 3.6K docs - medical
-    "arguana",  # 8.7K docs - arguments
-    "fiqa",  # 57K docs - financial
-    "trec-covid",  # 171K docs - COVID research
+    "scifact",  #  scientific IR
+    "nfcorpus",  # medical IR
+    "arguana",  # argument retrieval
+    "fiqa",  # financial IR
+    "trec-covid",  # COVID (medical) IR
 ]
 
 # Models to evaluate
