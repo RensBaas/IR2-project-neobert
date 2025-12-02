@@ -6,7 +6,7 @@ import numpy as np
 import math
 from scipy.stats import spearmanr
 from scipy.stats import pearsonr
-import src.metrics.dataGenerator as dataGenerator
+import pairsrc.metrics.dataGenerator as dataGenerator
 
 from tqdm import tqdm
 # a python script define computation of fairness measures and accuracy measures
