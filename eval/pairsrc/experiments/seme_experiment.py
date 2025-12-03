@@ -5,8 +5,8 @@ from glob import glob
 import statsmodels.api as sm
 from tqdm import tqdm
 from beir.datasets.data_loader import GenericDataLoader
-from src.metrics.duo import Duo
-from src.utils import load_wiki_balance
+from pairsrc.metrics.duo import Duo
+from pairsrc.utils import load_wiki_balance
 
 def any_links(row, platform):
     prefix = ''

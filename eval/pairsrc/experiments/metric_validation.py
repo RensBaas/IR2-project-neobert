@@ -1,5 +1,5 @@
-from src.metrics.duo import Duo
-from src.utils import load_wiki_balance
+from pairsrc.metrics.duo import Duo
+from pairsrc.utils import load_wiki_balance
 from beir.datasets.data_loader import GenericDataLoader
 import os, re, json
 import numpy as np

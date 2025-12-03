@@ -1,6 +1,6 @@
-from src.utils import load_wiki_balance
-from src.metrics.measures import *
-from src.metrics.duo import indexical_bias_results
+from pairsrc.utils import load_wiki_balance
+from pairsrc.metrics.measures import *
+from pairsrc.metrics.duo import indexical_bias_results
 from beir.retrieval.search.lexical import BM25Search as BM25
 from beir.retrieval.search.dense import DenseRetrievalExactSearch as DRES
 from beir.retrieval.search.sparse import SparseSearch
