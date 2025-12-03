@@ -14,7 +14,7 @@ import numpy as np
 import pathlib, os, json
 import argparse
 
-from evaluate_beir_multiple import CLSBiEncoder
+from utils import CLSBiEncoder
 from tokens import HF_TOKEN
         
 def belongs_to_category(_id, category, categories_csv):
