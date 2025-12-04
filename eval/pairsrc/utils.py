@@ -6,18 +6,18 @@ def load_wiki_balance(subset='synthetic'):
     queries = {}
     qrels = {}
      
-    data_corpus = load_dataset(f"SALT-NLP/wiki-balance-{subset}", "corpus")
+    data_corpus = load_dataset(f"SALT-NLP/wiki-balance-{subset}", "corpus", trust_remote_code=True)
     for line in data_corpus['corpus']:
         corpus[line['_id']] = {
             'text': line['text'],
             'title': line['title']
         }
         
-    data_queries = load_dataset(f"SALT-NLP/wiki-balance-{subset}", "queries")
+    data_queries = load_dataset(f"SALT-NLP/wiki-balance-{subset}", "queries", trust_remote_code=True)
     for line in data_queries['queries']:
         queries[line['_id']] = line['text']
         
-    data_qrels = load_dataset(f"SALT-NLP/wiki-balance-{subset}-qrels", "test")    
+    data_qrels = load_dataset(f"SALT-NLP/wiki-balance-{subset}-qrels", "test", trust_remote_code=True)    
     for line in data_qrels['test']:
         query_id, corpus_id, score = line["query-id"], line["corpus-id"], line["score"]
 
