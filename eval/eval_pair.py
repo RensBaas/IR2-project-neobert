@@ -123,9 +123,9 @@ def main():
     elif args.model == "splade":
         model = DRES(models.SPLADE("naver/splade_v2_distil"), batch_size=128)
     elif args.model == "neobert-dense":
-        model = DRES(CLSBiEncoder("oribrand/neobert-msmarco", token=HF_TOKEN, batch_size=64))
+        model = DRES(CLSBiEncoder("/home/scur1697/neobert_model_msmarco", batch_size=64))
     elif args.model == "bert-dense":
-        model = DRES(CLSBiEncoder("oribrand/bert-msmarco", token=HF_TOKEN, batch_size=64))
+        model = DRES(CLSBiEncoder("/home/scur1697/bert_model_msmarco", batch_size=64))
     elif args.model == "bm25":
         hostname = "localhost"
         index_name = args.dataset.replace("/", " ") 
