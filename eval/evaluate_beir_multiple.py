@@ -1,15 +1,15 @@
 import json
 import logging
 import os
+import traceback
 
 import numpy as np
-import torch
-from utils import CLSBiEncoder
 from beir import LoggingHandler, util
 from beir.datasets.data_loader import GenericDataLoader
 from beir.retrieval.evaluation import EvaluateRetrieval
 from beir.retrieval.search.dense import DenseRetrievalExactSearch as DRES
-from transformers import AutoModel, AutoTokenizer
+from eval_utils import calculate_retrieval_metrics, remove_identical_ids
+from utils import CLSBiEncoder
 
 logging.basicConfig(
     format="%(asctime)s - %(message)s",
@@ -18,6 +18,7 @@ logging.basicConfig(
     handlers=[LoggingHandler()],
     force=True,
 )
+
 
 def evaluate_model_on_dataset(model_name, model_path, dataset_name, trust_remote_code=False):
     """Evaluate a model on BEIR dataset"""
@@ -34,43 +35,63 @@ def evaluate_model_on_dataset(model_name, model_path, dataset_name, trust_remote
     corpus, queries, qrels = GenericDataLoader(data_folder=data_path).load(split="test")
     print(f"Loaded {len(corpus)} docs, {len(queries)} queries")
 
-    embeddings_dir = f"/home/scur1736/embeddings/{model_name.lower()}/{dataset_name}/"
-    os.makedirs(embeddings_dir, exist_ok=True)
-
     # Create model
     model = DRES(CLSBiEncoder(model_path, trust_remote_code=trust_remote_code, batch_size=64))
     retriever = EvaluateRetrieval(model, score_function="dot")
 
     # Retrieve
-    print("Encoding and retrieving")
-    results = retriever.encode_and_retrieve(corpus, queries, encode_output_path=embeddings_dir)
+    print("Encoding and retrieving...")
+    results = retriever.retrieve(corpus, queries)
 
-    # Evaluate
-    ndcg, _map, recall, precision = retriever.evaluate(qrels, results, retriever.k_values)
-    mrr = retriever.evaluate_custom(qrels, results, retriever.k_values, metric="mrr")
+    if dataset_name == "arguana":
+        print("Removing identical query-doc IDs for arguana")
+        results = remove_identical_ids(results)
 
-    # Print results
+    print("Calculating metrics")
+    output_all_scores, query_level_scores = calculate_retrieval_metrics(
+        results=results, qrels=qrels, return_scores=True
+    )
+
+    results_dir = f"/home/scur1736/results/{dataset_name}"
+    os.makedirs(results_dir, exist_ok=True)
+
+    with open(os.path.join(results_dir, f"{model_name.lower()}_metrics.json"), "w") as f:
+        json.dump(output_all_scores, f, indent=2)
+
+    with open(os.path.join(results_dir, f"{model_name.lower()}_query_scores.json"), "w") as f:
+        json.dump(query_level_scores, f, indent=2)
+
     print(f"\n{model_name} Results on {dataset_name}:")
-    print(f"  NDCG@10:  {ndcg['NDCG@10']:.4f}")
-    print(f"  MAP@10:   {_map['MAP@10']:.4f}")
-    print(f"  Recall@10: {recall['Recall@10']:.4f}")
-    print(f"  MRR@10:   {mrr['MRR@10']:.4f}")
+    print(f"  NDCG@10:        {output_all_scores['NDCG@10']:.4f}")
+    print(f"  MAP@10:         {output_all_scores['MAP@10']:.4f}")
+    print(f"  Recall@10:      {output_all_scores['Recall@10']:.4f}")
+    print(f"  MRR@10:         {output_all_scores['MRR@10']:.4f}")
+    print(f"  Oracle NDCG@10: {output_all_scores['Oracle NDCG@10']:.4f}")
 
     return {
-        "ndcg@10": ndcg["NDCG@10"],
-        "map@10": _map["MAP@10"],
-        "recall@10": recall["Recall@10"],
-        "mrr@10": mrr["MRR@10"],
+        "ndcg@10": output_all_scores["NDCG@10"],
+        "map@10": output_all_scores["MAP@10"],
+        "recall@10": output_all_scores["Recall@10"],
+        "mrr@10": output_all_scores["MRR@10"],
+        "oracle_ndcg@10": output_all_scores["Oracle NDCG@10"],
     }
 
 
-# Datasets to evaluate on
+# BEIR datasets
 datasets = [
-    "scifact",  #  scientific IR
-    "nfcorpus",  # medical IR
-    "arguana",  # argument retrieval
-    "fiqa",  # financial IR
-    "trec-covid",  # COVID (medical) IR
+    "trec-covid",
+    "nfcorpus",
+    "nq",
+    "hotpotqa",
+    "fiqa",
+    "arguana",
+    "webis-touche2020",
+    "quora",
+    "dbpedia-entity",
+    "scidocs",
+    "fever",
+    "climate-fever",
+    "scifact",
 ]
 
 # Models to evaluate
@@ -89,7 +110,8 @@ for dataset in datasets:
             results = evaluate_model_on_dataset(model_name, model_path, dataset, trust_remote)
             all_results[model_name][dataset] = results
         except Exception as e:
-            print(f"Error evaluating {model_name} on {dataset}: {str(e)}")
+            print(f"\nError evaluating {model_name} on {dataset}: {str(e)}")
+            traceback.print_exc()
             all_results[model_name][dataset] = None
 
 # Save results
@@ -99,12 +121,12 @@ os.makedirs(results_dir, exist_ok=True)
 with open(os.path.join(results_dir, "beir_comparison.json"), "w") as f:
     json.dump(all_results, f, indent=2)
 
-# summary table
-print("\n" + "=" * 80)
-print("SUMMARY: BERT vs NeoBERT on BEIR Datasets")
-print("=" * 80)
-print(f"\n{'Dataset':<15} {'BERT NDCG@10':<15} {'NeoBERT NDCG@10':<15} {'Improvement':<15}")
-print("-" * 60)
+# Print summary table
+print("\n" + "=" * 90)
+print("SUMMARY: BERT vs NeoBERT on All BEIR Datasets")
+print("=" * 90)
+print(f"\n{'Dataset':<20} {'BERT NDCG@10':<15} {'NeoBERT NDCG@10':<15} {'Improvement':<15}")
+print("-" * 70)
 
 bert_scores = []
 neobert_scores = []
@@ -118,16 +140,17 @@ for dataset in datasets:
         bert_scores.append(bert_score)
         neobert_scores.append(neobert_score)
 
-        print(f"{dataset:<15} {bert_score:<15.4f} {neobert_score:<15.4f} {improvement:+.1f}%")
+        print(f"{dataset:<20} {bert_score:<15.4f} {neobert_score:<15.4f} {improvement:+.1f}%")
 
 if bert_scores and neobert_scores:
     avg_bert = np.mean(bert_scores)
     avg_neobert = np.mean(neobert_scores)
     avg_improvement = ((avg_neobert - avg_bert) / avg_bert) * 100
 
-    print("-" * 60)
-    print(f"{'AVERAGE':<15} {avg_bert:<15.4f} {avg_neobert:<15.4f} {avg_improvement:+.1f}%")
+    print("-" * 70)
+    print(f"{'AVERAGE':<20} {avg_bert:<15.4f} {avg_neobert:<15.4f} {avg_improvement:+.1f}%")
 
-print("\n" + "=" * 80)
-print(f"Results saved to: {results_dir}/beir_comparison.json")
-print("=" * 80)
+print("\n" + "=" * 90)
+print(f"Results saved to: {results_dir}/beir_full_comparison.json")
+print(f"Per-dataset results in: {results_dir}/<dataset>/")
+print("=" * 90)
