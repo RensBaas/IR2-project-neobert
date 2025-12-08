@@ -1,0 +1,28 @@
+#!/bin/bash
+
+#SBATCH --partition=gpu_a100
+#SBATCH --gpus=1
+#SBATCH --job-name=eval_bright
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=18
+#SBATCH --time=34:00:00
+#SBATCH --output=logs/bright_eval_%j.out
+#SBATCH --error=logs/bright_eval_%j.err
+
+module purge
+module load 2024
+module load Anaconda3/2024.06-1
+
+source $HOME/tevatron_env/bin/activate
+
+
+# Print some info
+echo "Job started at: $(date)"
+echo "Running on node: $(hostname)"
+echo "GPU info:"
+nvidia-smi
+
+
+python $HOME/evaluate_bright.py
+
+echo "Job finished at: $(date)"
