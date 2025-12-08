@@ -151,6 +151,6 @@ if bert_scores and neobert_scores:
     print(f"{'AVERAGE':<20} {avg_bert:<15.4f} {avg_neobert:<15.4f} {avg_improvement:+.1f}%")
 
 print("\n" + "=" * 90)
-print(f"Results saved to: {results_dir}/beir_full_comparison.json")
+print(f"Results saved to: {results_dir}/beir_comparison.json")
 print(f"Per-dataset results in: {results_dir}/<dataset>/")
 print("=" * 90)
