@@ -85,7 +85,8 @@ datasets = [
     "leetcode",
     "pony",
     "aops",
-    "theoremqa",
+    "theoremqa_questions",
+    "theoremqa_theorems",
 ]
 
 # Models to evaluate

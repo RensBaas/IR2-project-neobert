@@ -138,6 +138,8 @@ def main():
         "leetcode",
         "pony",
         "aops",
+        "theoremqa_questions",
+        "theoremqa_theorems",
     ]
 
     for dataset in datasets_eval:
