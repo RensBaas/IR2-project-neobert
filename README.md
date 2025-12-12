@@ -43,6 +43,8 @@ pip install transformers==4.35.0 tokenizers==0.19.1 huggingface-hub==0.25.0 --fo
 
 ### 3. Install Evaluation Dependencies
 
+**Important note**: install these dependencies **AFTER** training models!!!
+
 ```bash
 pip install beir
 pip install faiss-cpu  # faiss gpu out of memory 
