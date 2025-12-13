@@ -7,6 +7,7 @@ This repository contains code and experiments for our reproducibility study of N
 - [Environment Installation](#installation)
 - [Training](#training)
 - [Evaluation](#evaluation)
+- Unified Retrieval Evaluation
 - [Results](#results)
 - [Repository Structure](#repository-structure)
 
@@ -153,6 +154,20 @@ Performs paired t-tests comparing BERT and NeoBERT on all datasets:
 - Uses MRR@10 for MS MARCO
 - Uses NDCG@10 for BEIR and BRIGHT datasets
 - Reports p-values and Cohen's d effect sizes
+
+### Unified Retrieval Evaluation
+```python eval/evaluate_retrieval.py run --base_dir [path/to/folder] --models [model1,model2,...] --datasets [dataset1,dataset2,...] --seed [random_seed] --noise [percentage]```
+
+We offer a unified retrieval evaluation script for BEIR and BRIGHT. The command has the following options:
+- ```--base_dir```. String. The folder where experiments files will be stored. The script builds the folder structure for each experiment run automatically.
+- ```--models```. String. Model names should be delineated by commas (and no spaces!). The script is known to support the following retrieval options ```bert, neobert, bm25```, but theoretically should be able to support other BERT-like encoders from HuggingFace if passing the full model name.
+- ```--datasets``` String. Dataset names from the names above for BEIR and BRIGHT, again separated by commas. You can mix and match any of the datasets across the benchmarks, the script takes care of the rest.
+- ```--seed```. Int (optional; default is 0). A random seed for experiment run. This mostly affects the procedure for typographic error generation in the robustness to noise exploration.
+- ```--noise```. Float (optional; default is 0; between 0 and 1). The percentage of words in a query on which a typographic errors is applied.
+
+This is a WIP! The following features have not yet been implemented:
+- Compatibility with query-level statistical testing.
+- In-domain evaluation with MS MARCO.
 
 ## Results
 
