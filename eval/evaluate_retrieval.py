@@ -5,12 +5,14 @@ import fire
 
 from eval_utils import CLSBiEncoder, BM25Model, calculate_retrieval_metrics, remove_identical_ids
 from make_typo_queries import make_noisy_queries
+from statistical_tests_unified import paired_t_test_dataset
 from beir import LoggingHandler, util
 from beir.datasets.data_loader import GenericDataLoader
 from beir.retrieval.evaluation import EvaluateRetrieval
 from beir.retrieval.search.dense import DenseRetrievalExactSearch as DRES
-from transformers import AutoModel, AutoTokenizer
 from pathlib import Path
+from itertools import combinations
+import numpy as np
 
 from rank_bm25 import BM25Okapi
 import shortuuid
@@ -38,7 +40,7 @@ logging.basicConfig(
 )
 
 class RetrievalExperiment:
-    def __init__(self, base_dir, models, datasets, seed=0, noise=0):
+    def __init__(self, base_dir, models, datasets, statistics=False, seed=0, noise=0):
         self.run = shortuuid.uuid()
 
         # Build folder structure
@@ -91,17 +93,20 @@ class RetrievalExperiment:
         for m in models:
             name, (path, trust_rem) = self.get_model(m)
             self.models[name] = (path, trust_rem)
+
+        self.model_names = list(self.models.keys())
         
         # Make embedding folders
         for dataset_name in self.datasets:
-            for model_name in self.models.keys():
+            for model_name in self.model_names:
                 os.makedirs(self.embeddings_path / model_name / dataset_name, exist_ok=True)
 
-        self.results_buffer = {model_name: {} for model_name in self.models.keys()}
+        self.statistics = statistics if len(self.model_names) > 0 else False
+        self.results_buffer = {model_name: {} for model_name in self.model_names}
         self.experiment_metadata = {
             'timestamp': time.asctime(),
             'run_id': self.run,
-            'models': ','.join(list(self.models.keys())),
+            'models': ','.join(self.model_names),
             'datasets': ','.join(self.datasets),
             'seed': str(seed),
             'noise': str(noise),
@@ -120,32 +125,28 @@ class RetrievalExperiment:
                                                         dataset_dir, 
                                                         embbedings_dir, 
                                                         trust_remote)
+                    self._save_round_results(model_name, dataset, full_average, full_per_query)
                     self.results_buffer[model_name][dataset] = results
                 except Exception as e:
                     print(f"Error evaluating {model_name} on {dataset}: {str(e)}")
                     self.results_buffer[model_name][dataset] = None
 
-                self._save_round_results(model_name, dataset, full_average, full_per_query)
-
         self._save_results()
+
+        if self.statistics:
+            self._paired_statistical_tests()
 
     def _save_round_results(self, model_name, dataset_name, average_results, per_query_results):
         round_metadata = self.experiment_metadata.copy()
         round_metadata['datasets'] = dataset_name
         round_metadata['models'] = model_name
-        with open(self.results_path / f"{model_name}_{dataset_name}_average_scores.json", "w") as f:
+        with open(self.results_path / f"{model_name}_{dataset_name}_scores.json", "w") as f:
             json.dump({'metadata': round_metadata,
-                       'average_results' : average_results},
-                       f, 
-                       indent=2)
-            
-        with open(self.results_path / f"{model_name}_{dataset_name}_query_scores", "w") as f:
-            json.dump({'metadata': round_metadata,
+                       'average_results': average_results,
                        'per_query_results' : per_query_results},
                        f, 
                        indent=2)
         
-
     def _save_results(self):
         if self.mixed:
             beir_buffer, bright_buffer = dict(), dict()
@@ -250,10 +251,46 @@ class RetrievalExperiment:
 
         return metrics10, averaged_scores, query_level_scores 
 
+    def _get_round_results_path(self, model, dataset):
+        return self.results_path / f"{model}_{dataset}_scores.json"
 
-def run_experiment(base_dir, models, datasets, seed=0, noise=0):
+    def _paired_statistical_tests(self):
+        buffer = []
+        unique_model_pairs = list(combinations(self.model_names, 2))
+        for dataset in self.datasets:
+            metric = "MRR@10" if dataset == 'msmarco' else 'ndcg_cut_10'
+            for model1, model2 in unique_model_pairs:
+                result = paired_t_test_dataset(model1,
+                                               model2,
+                                               self._get_round_results_path(model1, dataset), 
+                                               self._get_round_results_path(model2, dataset),
+                                               metric,
+                                               dataset)
+                buffer.append(result)
+        
+        print("\n" + "=" * 100)
+        print("Overall Statistics")
+        print("=" * 100)
+
+        sig_count = sum(1 for r in buffer if r["p_value"] < 0.05)
+        highly_sig_count = sum(1 for r in buffer if r["p_value"] < 0.001)
+        avg_improvement = np.mean([r["improvement_pct"] for r in buffer])
+
+        print(f"\nTotal datasets tested:\t{len(buffer)}")
+        print(f"Significant improvements (p<0.05):\t{sig_count} ({sig_count / len(buffer) * 100:.1f}%)")
+        print(f"Highly significant (p<0.001):\t{highly_sig_count} ({highly_sig_count / len(buffer) * 100:.1f}%)")
+        print(f"Average improvement:\t{avg_improvement:+.2f}%")
+
+        # Save results to JSON
+        output_file = self.results_path / "statistical_testing_results.json"
+        with open(output_file, "w") as f:
+            json.dump({'metadata': self.experiment_metadata,
+                       'results': buffer}, f, indent=2)
+    
+
+def run_experiment(base_dir, models, datasets, statistics=False, seed=0, noise=0):
     random.seed(seed)
-    experiment = RetrievalExperiment(base_dir, models, datasets, seed, noise)
+    experiment = RetrievalExperiment(base_dir, models, datasets, statistics, seed, noise)
     print(f'{"=" * 70}\nStarting experiment {experiment.run}\n{"=" * 70}')
     experiment.run_experiment()
 
