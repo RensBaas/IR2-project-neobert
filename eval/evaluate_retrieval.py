@@ -26,6 +26,7 @@ MODEL_CHECKPOINTS = { # Update with HF checkpoints when public
     "neobert": ("/home/scur1736/model_msmarco_neobert", True),
 }
 
+MSMARCO = "msmarco"
 BEIR = ["trec-covid","nfcorpus","nq","hotpotqa","fiqa","arguana","webis-touche2020","quora","dbpedia-entity",
         "scidocs","fever","climate-fever","scifact"]
 BRIGHT = ["biology","earth_science","economics","psychology","robotics","stackoverflow","sustainable_living",
@@ -63,9 +64,10 @@ class RetrievalExperiment:
         # Download and unzip datasets
         self.datasets = datasets
         self.mixed = (len(set(self.datasets).intersection(set(BEIR))) > 0) and (len(set(self.datasets).intersection(set(BRIGHT))) > 0)
+        self.in_domain = MSMARCO in self.datasets
 
         for dataset_name in self.datasets:
-            if dataset_name in BEIR:
+            if dataset_name in BEIR or dataset_name == MSMARCO:
                 url = f"https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/{dataset_name}.zip"
             elif dataset_name in BRIGHT:
                 url = f"https://github.com/liyongkang123/extended_beir_datasets/releases/download/beir_v1.0/{dataset_name}.zip"
@@ -156,18 +158,22 @@ class RetrievalExperiment:
                         beir_buffer.setdefault(model, {})[dataset] = results
                     else:
                         bright_buffer.setdefault(model, {})[dataset] = results
-            with open(self.results_path / "retrieval_comparison.json", "w") as f:
-                json.dump({'metadata': self.experiment_metadata,
-                        'beir_results' : beir_buffer,
-                        'bright_results': bright_buffer},
-                        f, 
-                        indent=2)
+            data = {'metadata': self.experiment_metadata,
+                    'beir_results' : beir_buffer,
+                    'bright_results': bright_buffer}
         else:
-            with open(self.results_path / "retrieval_comparison.json", "w") as f:
-                json.dump({'metadata': self.experiment_metadata,
-                        'results' : self.results_buffer},
-                        f, 
-                        indent=2)
+            data = {'metadata': self.experiment_metadata,
+                    'results' : self.results_buffer}
+    
+        if self.in_domain:
+            msmarco_buffer = {}
+            for model, datasets in self.results_buffer.keys():
+                results = datasets[MSMARCO]
+                msmarco_buffer.setdefault(model, {})[MSMARCO] = results
+            data["msmarco_results"] = msmarco_buffer
+
+        with open(self.results_path / "retrieval_comparison.json", "w") as f:
+            json.dump(data, f, indent=2)
 
         print(f"Results saved to {self.results_path / 'retrieval_comparison.json'}")
 
