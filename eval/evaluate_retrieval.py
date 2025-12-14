@@ -63,11 +63,16 @@ class RetrievalExperiment:
 
         # Download and unzip datasets
         self.datasets = datasets
-        self.mixed = (len(set(self.datasets).intersection(set(BEIR))) > 0) and (len(set(self.datasets).intersection(set(BRIGHT))) > 0)
+        self.beir = len(set(self.datasets).intersection(set(BEIR))) > 0
+        self.bright = len(set(self.datasets).intersection(set(BRIGHT))) > 0
         self.in_domain = MSMARCO in self.datasets
 
         for dataset_name in self.datasets:
             if dataset_name in BEIR or dataset_name == MSMARCO:
+                if dataset_name == MSMARCO:
+                    shutil.copytree('/Users/ori/Downloads/msmarco', self.data_path / "msmarco", dirs_exist_ok=True)
+                    continue
+
                 url = f"https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/{dataset_name}.zip"
             elif dataset_name in BRIGHT:
                 url = f"https://github.com/liyongkang123/extended_beir_datasets/releases/download/beir_v1.0/{dataset_name}.zip"
@@ -150,27 +155,24 @@ class RetrievalExperiment:
                        indent=2)
         
     def _save_results(self):
-        if self.mixed:
-            beir_buffer, bright_buffer = dict(), dict()
-            for model, datasets in self.results_buffer.items():
-                for dataset, results in datasets.items():
-                    if dataset in BEIR:
-                        beir_buffer.setdefault(model, {})[dataset] = results
-                    else:
-                        bright_buffer.setdefault(model, {})[dataset] = results
-            data = {'metadata': self.experiment_metadata,
-                    'beir_results' : beir_buffer,
-                    'bright_results': bright_buffer}
-        else:
-            data = {'metadata': self.experiment_metadata,
-                    'results' : self.results_buffer}
-    
+        beir_buffer, bright_buffer, msmarco_buffer = dict(), dict(), dict()
+        for model, datasets in self.results_buffer.items():
+            for dataset, results in datasets.items():
+                if dataset in BEIR:
+                    beir_buffer.setdefault(model, {})[dataset] = results
+                elif dataset in BRIGHT:
+                    bright_buffer.setdefault(model, {})[dataset] = results
+                elif dataset == MSMARCO:
+                    msmarco_buffer.setdefault(model, {})[dataset] = results
+
+        data = dict()
+        data['metadata'] = self.experiment_metadata
+        if self.beir:
+            data['beir_results'] = beir_buffer
+        if self.bright:
+            data['bright_results'] = bright_buffer
         if self.in_domain:
-            msmarco_buffer = {}
-            for model, datasets in self.results_buffer.keys():
-                results = datasets[MSMARCO]
-                msmarco_buffer.setdefault(model, {})[MSMARCO] = results
-            data["msmarco_results"] = msmarco_buffer
+            data['msmarco_results'] = msmarco_buffer
 
         with open(self.results_path / "retrieval_comparison.json", "w") as f:
             json.dump(data, f, indent=2)
