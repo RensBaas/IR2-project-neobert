@@ -162,12 +162,13 @@ Performs paired t-tests comparing BERT and NeoBERT on all datasets:
 We offer a unified retrieval evaluation script for BEIR and BRIGHT. The command has the following options:
 - ```--base_dir```. String. The folder where experiments files will be stored. The script builds the folder structure for each experiment run automatically.
 - ```--models```. String. Model names should be delineated by commas (and no spaces!). The script is known to support the following retrieval options ```bert, neobert, bm25```, but theoretically should be able to support other BERT-like encoders from HuggingFace if passing the full model name.
-- ```--datasets``` String. Dataset names from the names above for BEIR and BRIGHT, again separated by commas. You can mix and match any of the datasets across the benchmarks, the script takes care of the rest.
+- ```--datasets```. String. Dataset names from the names above for BEIR and BRIGHT, again separated by commas. You can mix and match any of the datasets across the benchmarks, the script takes care of the rest.
+- ```--statistics```. Bool (optional; default is False). When set to True, statistical testing (paired t-test and effect size) is run at the end of the evaluation. Statistical testing requires evaluation with at least two models and will be disabled if only one model is given (note: the models need to run correctly, so as before if they're not in our list this step could fail).
 - ```--seed```. Int (optional; default is 0). A random seed for experiment run. This mostly affects the procedure for typographic error generation in the robustness to noise exploration.
 - ```--noise```. Float (optional; default is 0; between 0 and 1). The percentage of words in a query on which a typographic errors is applied.
 
 This is a WIP! The following features have not yet been implemented:
-- Compatibility with query-level statistical testing.
+- ~~Compatibility with query-level statistical testing.~~
 - In-domain evaluation with MS MARCO.
 
 ## Results
