@@ -50,6 +50,7 @@ pip install transformers==4.35.0 tokenizers==0.19.1 huggingface-hub==0.25.0 --fo
 pip install beir
 pip install faiss-cpu  # faiss gpu out of memory 
 pip install "numpy<2"  # Required for faiss compatibility
+pip install fire scipy rank-bm25 shortuuid textattack tqdm # Requirements for unified evaluation
 ```
 
 ## Training - train folder 
