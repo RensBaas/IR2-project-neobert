@@ -169,7 +169,7 @@ We offer a unified retrieval evaluation script for BEIR and BRIGHT. The command 
 
 This is a WIP! The following features have not yet been implemented:
 - ~~Compatibility with query-level statistical testing.~~
-- In-domain evaluation with MS MARCO.
+- ~~In-domain evaluation with MS MARCO.~~
 
 ## Results
 
