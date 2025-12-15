@@ -32,7 +32,7 @@ nvidia-smi
 # Run training
 python $HOME/bert_classification_toxic_eval.py \
   --model_name microsoft/deberta-v3-large \
-  --model_location ./trained_models/deberta_classification_3E
+  --model_location ./trained_models/deberta_toxic_class_3E
  
 
 echo "Job finished at: $(date)"

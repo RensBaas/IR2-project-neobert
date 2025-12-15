@@ -212,11 +212,76 @@ results/
 
 See paper for detailed analysis.
 
+## Classsification
+
+Each classification task has its own training and evaluation code. To use these you will need the same dependencies as used for the retrieval training above, except tevatron. Since hyperparameter were kept the same for each model, there are no options to change these when calling the scripts. For additional hyperparameter tuning you need to change them in the python files or add them in there as additional parsable arguments.
+
+### SST-5
+To train a BERT model on SST-5 we have two ways: one is using the python notebook named BERT_classification_sst.ipynb, the other is using our normal python script. This can be called directly with:
+```
+python bert_classification_sst.py \
+  --model_name google-bert/bert-base-uncased \
+  --save_name bert-base
+```
+
+or by using one of our jobs:
+```
+sbatch sst_jobs/train_roberta_large_sst_class.job
+```
+Running the jobs also returns the testset performance and models are saved at: `trained_models/<model_name>_sst_3E`.
+
+### Toxic Comment Classification
+#### Data
+To train the toxic comment classification models you first need to download the dataset from kaggle by hand an place the .csv files in the same folder as the python script.
+
+#### Training
+After downloading the data, the BERT models can be trained using the following code:
+```
+python bert_classification_toxic.py \
+  --model_name google-bert/bert-base-uncased \
+  --save_name bert-base \
+  --dataset_name train.csv
+```
+or with one of our job files from `toxic_comment_jobs/`:
+```
+sbatch toxic_comment_jobs/train_bert_toxic_class.job
+```
+The trained model gets saved at `trained_models/<save_name>_toxic_class_3E`.
+
+#### Evaluation
+To evaluate on the toxic comment classification test set, you can use:
+```
+python bert_classification_toxic_eval.py \
+  --model_name google-bert/bert-base-uncased \
+  --model_location ./trained_models/bert-base_toxic_class_3E
+```
+Or one of our job files in `toxic_comment_eval_jobs/`:
+```
+sbatch toxic_comment_eval_jobs/train_bert_toxic_class.job
+```
+
+### Adversarial NLI
+Both training and testset evaluation on the testset for adversarial NLI happen in one script. It can be called using:
+```
+python bert_classification_adverserial.py \
+  --model_name google-bert/bert-base-uncased \
+  --save_name bert-base
+```
+Or one of our job files in adv_jobs:
+```
+sbatch adv_jobs/train_bert_adv_class.job
+```
+Models are saved at `trained_models_adv/<save_name>_anli_4E`.
+
+
+
+
 ## Repository Structure
 
 ```
 .
 ├── README.md
-├── eval         # all python files and job files needed for evaluation 
-└── train        # all python files and job files needed for training 
+├── eval            # all python files and job files needed for evaluation 
+├── train           # all python files and job files needed for training 
+└── classification  # all python files and job files needed for classification tasks training and evaluation
 ```

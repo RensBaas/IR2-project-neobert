@@ -32,7 +32,7 @@ nvidia-smi
 # Run training
 python $HOME/bert_classification_toxic_eval.py \
   --model_name answerdotai/ModernBERT-base \
-  --model_location ./trained_models/modernbert-base_classification_3E
+  --model_location ./trained_models/modernbert-base_toxic_class_3E
  
 
 echo "Job finished at: $(date)"

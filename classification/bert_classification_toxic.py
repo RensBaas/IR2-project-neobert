@@ -131,7 +131,7 @@ def main():
     print(results)
 
     save_name = args.save_name
-    trainer.save_model("./trained_models/{}_classification_3E".format(save_name))
+    trainer.save_model("./trained_models/{}_toxic_class_3E".format(save_name))
 
 
 # Initialize the BERT tokenizer
