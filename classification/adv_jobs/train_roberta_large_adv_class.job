@@ -1,0 +1,38 @@
+#!/bin/bash
+
+#SBATCH --partition=gpu_a100
+#SBATCH --gpus=1
+#SBATCH --job-name=roberta_large_adverserial_class
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=2
+#SBATCH --time=6:00:00
+#SBATCH --output=logs/train_roberta_large_adv_%j.out
+#SBATCH --error=logs/train_roberta_large_adv_%j.err
+
+module load 2025
+
+pip install --user transformers datasets accelerate xformers
+
+# Set cache directories
+export HF_HOME=$HOME/.cache/huggingface
+export TRANSFORMERS_CACHE=$HOME/.cache/huggingface/transformers
+export HF_DATASETS_CACHE=$HOME/.cache/huggingface/datasets
+
+export TRUST_REMOTE_CODE=True
+
+# Create output directory 
+mkdir -p $HOME/trained_models_adv
+mkdir -p logs_adv
+
+# Print some info
+echo "Job started at: $(date)"
+echo "Running on node: $(hostname)"
+echo "GPU info:"
+nvidia-smi
+
+# Run training
+python $HOME/bert_classification_adverserial.py \
+  --model_name FacebookAI/roberta-large \
+  --save_name roberta-large
+
+echo "Job finished at: $(date)"

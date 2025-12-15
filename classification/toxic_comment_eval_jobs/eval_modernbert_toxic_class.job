@@ -1,0 +1,38 @@
+#!/bin/bash
+
+#SBATCH --partition=gpu_a100
+#SBATCH --gpus=1
+#SBATCH --job-name=eval_modernbert_toxic
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=2
+#SBATCH --time=0:30:00
+#SBATCH --output=logs/eval_modernbert_toxic_%j.out
+#SBATCH --error=logs/eval_modernbert_toxic_%j.err
+
+module load 2025
+
+pip install --user transformers datasets accelerate xformers
+
+# Set cache directories
+export HF_HOME=$HOME/.cache/huggingface
+export TRANSFORMERS_CACHE=$HOME/.cache/huggingface/transformers
+export HF_DATASETS_CACHE=$HOME/.cache/huggingface/datasets
+
+export TRUST_REMOTE_CODE=True
+
+# Create output directory 
+mkdir -p logs
+
+# Print some info
+echo "Job started at: $(date)"
+echo "Running on node: $(hostname)"
+echo "GPU info:"
+nvidia-smi
+
+# Run training
+python $HOME/bert_classification_toxic_eval.py \
+  --model_name answerdotai/ModernBERT-base \
+  --model_location ./trained_models/modernbert-base_toxic_class_3E
+ 
+
+echo "Job finished at: $(date)"
