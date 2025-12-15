@@ -56,11 +56,6 @@ pip install fire scipy rank-bm25 shortuuid textattack tqdm # Requirements for un
 ## Training - train folder 
 
 ### BERT Training
-
-```bash
-sbatch train_bert.job
-```
-
 **Training configuration:**
 - Model: `bert-base-uncased`
 - Dataset: MS MARCO passage
@@ -70,12 +65,32 @@ sbatch train_bert.job
 - Learning rate: 1e-5
 - Expected time: ~2-3 hours on H100
 
-### NeoBERT Training
+You can run training for BERT using the following commands:
+```
+python -m tevatron.driver.train \
+  --output_dir $HOME/model_msmarco \
+  --model_name_or_path bert-base-uncased \
+  --save_steps 10000 \
+  --dataset_name Tevatron/msmarco-passage \
+  --fp16 \
+  --per_device_train_batch_size 64 \
+  --train_n_passages 8 \
+  --dataloader_num_workers 8 \
+  --learning_rate 1e-5 \
+  --q_max_len 32 \
+  --p_max_len 128 \
+  --num_train_epochs 3 \
+  --logging_steps 500 \
+  --overwrite_output_dir
+```
+**OR**
 
 ```bash
-sbatch train_neobert.job
+sbatch train_bert.job
 ```
 
+
+### NeoBERT Training
 **Training configuration:**
 - Model: `chandar-lab/NeoBERT`
 - Dataset: MS MARCO passage
@@ -86,6 +101,10 @@ sbatch train_neobert.job
 - Expected time: ~5-6 hours on H100
 
 **Note:** NeoBERT requires `trust_remote_code=True` and uses a custom training script to handle remote code automatically (train_neobert_custom.py).
+
+```bash
+sbatch train_neobert.job
+```
 
 ## Evaluation - eval file
 
