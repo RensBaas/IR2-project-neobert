@@ -7,7 +7,7 @@ This repository contains code and experiments for our reproducibility study of N
 - [Environment Installation](#installation)
 - [Training](#training)
 - [Evaluation](#evaluation)
-- Unified Retrieval Evaluation
+- [Unified Retrieval Evaluation](#unified-retrieval-evaluation)
 - [Results](#results)
 - [Repository Structure](#repository-structure)
 
