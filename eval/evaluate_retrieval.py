@@ -1,0 +1,311 @@
+import json
+import logging
+import os
+import fire
+
+from eval_utils import CLSBiEncoder, BM25Model, calculate_retrieval_metrics, remove_identical_ids
+from make_typo_queries import make_noisy_queries
+from statistical_tests_unified import paired_t_test_dataset
+from beir import LoggingHandler, util
+from beir.datasets.data_loader import GenericDataLoader
+from beir.retrieval.evaluation import EvaluateRetrieval
+from beir.retrieval.search.dense import DenseRetrievalExactSearch as DRES
+from pathlib import Path
+from itertools import combinations
+import numpy as np
+
+from rank_bm25 import BM25Okapi
+import shortuuid
+import re
+import shutil
+import random
+import time
+
+MODEL_CHECKPOINTS = { # Update with HF checkpoints when public
+    "bert": ("/home/scur1736/model_msmarco", False),
+    "neobert": ("/home/scur1736/model_msmarco_neobert", True),
+}
+
+MSMARCO = "msmarco"
+BEIR = ["trec-covid","nfcorpus","nq","hotpotqa","fiqa","arguana","webis-touche2020","quora","dbpedia-entity",
+        "scidocs","fever","climate-fever","scifact"]
+BRIGHT = ["biology","earth_science","economics","psychology","robotics","stackoverflow","sustainable_living",
+          "leetcode","pony","aops","theoremqa_questions","theoremqa_theorems"]
+
+logging.basicConfig(
+    format="%(asctime)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    level=logging.INFO,
+    handlers=[LoggingHandler()],
+    force=True,
+)
+
+class RetrievalExperiment:
+    def __init__(self, base_dir, models, datasets, statistics=False, seed=0, noise=0):
+        self.run = shortuuid.uuid()
+
+        # Build folder structure
+        self.exp_dir = Path(base_dir) / f'Run_{self.run}'
+
+        self.data_path = Path(self.exp_dir) / "datasets"
+        os.makedirs(self.data_path, exist_ok=True)
+
+        self.embeddings_path = Path(self.exp_dir) / "embeddings"
+        os.makedirs(self.embeddings_path, exist_ok=True)
+
+        self.results_path = Path(self.exp_dir) / 'results'
+        os.makedirs(self.results_path, exist_ok=True)
+
+        if isinstance(models, str):
+            models = models.split(",")
+        if isinstance(datasets, str):
+            datasets = datasets.split(",")
+
+        # Download and unzip datasets
+        self.datasets = datasets
+        self.beir = len(set(self.datasets).intersection(set(BEIR))) > 0
+        self.bright = len(set(self.datasets).intersection(set(BRIGHT))) > 0
+        self.in_domain = MSMARCO in self.datasets
+
+        for dataset_name in self.datasets:
+            if dataset_name in BEIR or dataset_name == MSMARCO:
+                if dataset_name == MSMARCO:
+                    shutil.copytree('/Users/ori/Downloads/msmarco', self.data_path / "msmarco", dirs_exist_ok=True)
+                    continue
+
+                url = f"https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/{dataset_name}.zip"
+            elif dataset_name in BRIGHT:
+                url = f"https://github.com/liyongkang123/extended_beir_datasets/releases/download/beir_v1.0/{dataset_name}.zip"
+            else:
+                print(f'{dataset_name} is not a known dataset. Removing {dataset_name} from evaluation.')
+                self.datasets.pop(dataset_name)
+                continue
+            _ = util.download_and_unzip(url, str(self.data_path))
+
+        # Copy datasets and add noise
+        self.noise = noise
+        if self.noise > 0:
+            self.noisy_data_path = self.exp_dir / "datasets_noisy"
+            os.makedirs(self.noisy_data_path, exist_ok=True)
+            for f in self.data_path.glob("*.zip"):
+                f.unlink()  
+            shutil.copytree(self.data_path, self.noisy_data_path, dirs_exist_ok=True)
+            
+            for dataset_name in self.datasets:
+                make_noisy_queries(self.noisy_data_path / dataset_name / "queries.jsonl",
+                                   self.noisy_data_path / dataset_name / "queries.jsonl",
+                                   noise_level=noise)
+
+        # Get model name, path, and trust_remote
+        self.models = dict()
+        for m in models:
+            name, (path, trust_rem) = self.get_model(m)
+            self.models[name] = (path, trust_rem)
+
+        self.model_names = list(self.models.keys())
+        
+        # Make embedding folders
+        for dataset_name in self.datasets:
+            for model_name in self.model_names:
+                os.makedirs(self.embeddings_path / model_name / dataset_name, exist_ok=True)
+
+        self.statistics = statistics if len(self.model_names) > 1 else False
+        self.results_buffer = {model_name: {} for model_name in self.model_names}
+        self.experiment_metadata = {
+            'timestamp': time.asctime(),
+            'run_id': self.run,
+            'models': ','.join(self.model_names),
+            'datasets': ','.join(self.datasets),
+            'seed': str(seed),
+            'noise': str(noise),
+            'experiment_dir': str(self.exp_dir),
+        }
+
+    def run_experiment(self):
+        for dataset in self.datasets:
+            for model in self.models.items():
+                model_name, (model_path, trust_remote) = model
+                try:
+                    dataset_dir = self.data_path / dataset
+                    if self.noise > 0:
+                        dataset_dir = self.noisy_data_path / dataset
+                    embbedings_dir = self.embeddings_path / model_name / dataset
+                    results, full_average, full_per_query = RetrievalExperiment._evaluate_model_on_dataset(model_name, 
+                                                        model_path, 
+                                                        dataset_dir, 
+                                                        embbedings_dir, 
+                                                        trust_remote)
+                    self._save_round_results(model_name, dataset, full_average, full_per_query)
+                    self.results_buffer[model_name][dataset] = results
+                except Exception as e:
+                    print(f"Error evaluating {model_name} on {dataset}: {str(e)}")
+                    self.results_buffer[model_name][dataset] = None
+
+        self._save_results()
+
+        if self.statistics:
+            self._paired_statistical_tests()
+
+    def _save_round_results(self, model_name, dataset_name, average_results, per_query_results):
+        round_metadata = self.experiment_metadata.copy()
+        round_metadata['datasets'] = dataset_name
+        round_metadata['models'] = model_name
+        with open(self.results_path / f"{model_name}_{dataset_name}_scores.json", "w") as f:
+            json.dump({'metadata': round_metadata,
+                       'average_results': average_results,
+                       'per_query_results' : per_query_results},
+                       f, 
+                       indent=2)
+        
+    def _save_results(self):
+        beir_buffer, bright_buffer, msmarco_buffer = dict(), dict(), dict()
+        for model, datasets in self.results_buffer.items():
+            for dataset, results in datasets.items():
+                if dataset in BEIR:
+                    beir_buffer.setdefault(model, {})[dataset] = results
+                elif dataset in BRIGHT:
+                    bright_buffer.setdefault(model, {})[dataset] = results
+                elif dataset == MSMARCO:
+                    msmarco_buffer.setdefault(model, {})[dataset] = results
+
+        data = dict()
+        data['metadata'] = self.experiment_metadata
+        if self.beir:
+            data['beir_results'] = beir_buffer
+        if self.bright:
+            data['bright_results'] = bright_buffer
+        if self.in_domain:
+            data['msmarco_results'] = msmarco_buffer
+
+        with open(self.results_path / "retrieval_comparison.json", "w") as f:
+            json.dump(data, f, indent=2)
+
+        print(f"Results saved to {self.results_path / 'retrieval_comparison.json'}")
+
+    @staticmethod
+    def get_model(model):
+        if model in MODEL_CHECKPOINTS.keys():
+            return model, MODEL_CHECKPOINTS[model]
+        elif model == "bm25":
+            return "bm25", (None, False)
+        else:
+            return RetrievalExperiment._clean_model_name(model), (model, True)
+    
+    @staticmethod
+    def _clean_model_name(model_path):
+        model_name = model_path.split('/')[-1]
+        model_name = re.sub(r'[^a-zA-Z0-9]', '', model_name)
+        model_name = model_name.lower()
+        return model_name
+
+    @staticmethod
+    def _evaluate_model_on_dataset(model_name, model_path, data_path, embeddings_dir, trust_remote_code=False):
+        """Evaluate a model on BEIR dataset"""
+
+        print(f"\n{'=' * 70}")
+        print(f"Evaluating {model_name} on {data_path.name}")
+        print(f"{'=' * 70}\n")
+
+        # Load data
+        corpus, queries, qrels = GenericDataLoader(data_folder=data_path).load(split="test")
+        print(f"Loaded {len(corpus)} docs, {len(queries)} queries")
+
+        # Create model
+        if model_name == "bm25":
+            # Tokenize corpus
+            corpus_ids = list(corpus.keys())
+            tokenized_corpus = [
+                (corpus[doc_id].get("title", "") + " " + corpus[doc_id].get("text", "")).lower().split() 
+                for doc_id in corpus_ids
+            ]
+
+            # Initialize BM25
+            bm25 = BM25Okapi(tokenized_corpus)
+            model = BM25Model(bm25, corpus_ids)
+            retriever = EvaluateRetrieval(model, score_function="bm25")
+
+            # Retrieve
+            print("Encoding and retrieving")
+            results = model.search(corpus, queries, top_k=1000)
+        else:
+            model = DRES(CLSBiEncoder(model_path, trust_remote_code=trust_remote_code, batch_size=64))
+            retriever = EvaluateRetrieval(model, score_function="dot")
+
+            # Retrieve
+            print("Encoding and retrieving")
+            results = retriever.encode_and_retrieve(corpus, queries, encode_output_path=embeddings_dir)
+
+        # Evaluate
+        if data_path.name == "arguana":
+            print("Removing identical query-doc IDs for arguana")
+            results = remove_identical_ids(results)
+
+        print("Calculating metrics")
+        averaged_scores, query_level_scores = calculate_retrieval_metrics(
+            results=results, qrels=qrels, return_scores=True
+        )
+
+        metrics10 = {
+            "ndcg@10": averaged_scores["NDCG@10"],
+            "map@10": averaged_scores["MAP@10"],
+            "recall@10": averaged_scores["Recall@10"],
+            "mrr@10": averaged_scores["MRR@10"],
+            "oracle_ndcg@10": averaged_scores["Oracle NDCG@10"],
+        }
+
+        print(f"\n{model_name} Results on {data_path.name}:")
+        print(f"  NDCG@10:        {averaged_scores['NDCG@10']:.4f}")
+        print(f"  MAP@10:         {averaged_scores['MAP@10']:.4f}")
+        print(f"  Recall@10:      {averaged_scores['Recall@10']:.4f}")
+        print(f"  MRR@10:         {averaged_scores['MRR@10']:.4f}")
+        print(f"  Oracle NDCG@10: {averaged_scores['Oracle NDCG@10']:.4f}")
+
+        return metrics10, averaged_scores, query_level_scores 
+
+    def _get_round_results_path(self, model, dataset):
+        return self.results_path / f"{model}_{dataset}_scores.json"
+
+    def _paired_statistical_tests(self):
+        buffer = []
+        unique_model_pairs = list(combinations(self.model_names, 2))
+        for dataset in self.datasets:
+            metric = "MRR@10" if dataset == 'msmarco' else 'ndcg_cut_10'
+            for model1, model2 in unique_model_pairs:
+                result = paired_t_test_dataset(model1,
+                                               model2,
+                                               self._get_round_results_path(model1, dataset), 
+                                               self._get_round_results_path(model2, dataset),
+                                               metric,
+                                               dataset)
+                buffer.append(result)
+        
+        print("\n" + "=" * 100)
+        print("Overall Statistics")
+        print("=" * 100)
+
+        sig_count = sum(1 for r in buffer if r["p_value"] < 0.05)
+        highly_sig_count = sum(1 for r in buffer if r["p_value"] < 0.001)
+        avg_improvement = np.mean([r["improvement_pct"] for r in buffer])
+
+        print(f"\nTotal datasets tested:\t{len(buffer)}")
+        print(f"Significant improvements (p<0.05):\t{sig_count} ({sig_count / len(buffer) * 100:.1f}%)")
+        print(f"Highly significant (p<0.001):\t{highly_sig_count} ({highly_sig_count / len(buffer) * 100:.1f}%)")
+        print(f"Average improvement:\t{avg_improvement:+.2f}%")
+
+        # Save results to JSON
+        output_file = self.results_path / "statistical_testing_results.json"
+        with open(output_file, "w") as f:
+            json.dump({'metadata': self.experiment_metadata,
+                       'results': buffer}, f, indent=2)
+    
+
+def run_experiment(base_dir, models, datasets, statistics=False, seed=0, noise=0):
+    random.seed(seed)
+    experiment = RetrievalExperiment(base_dir, models, datasets, statistics, seed, noise)
+    print(f'{"=" * 70}\nStarting experiment {experiment.run}\n{"=" * 70}')
+    experiment.run_experiment()
+
+if __name__ == "__main__":
+    fire.Fire({
+        "run": run_experiment,
+    })
