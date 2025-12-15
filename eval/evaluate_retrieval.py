@@ -83,7 +83,8 @@ class RetrievalExperiment:
             _ = util.download_and_unzip(url, str(self.data_path))
 
         # Copy datasets and add noise
-        if noise > 0:
+        self.noise = noise
+        if self.noise > 0:
             self.noisy_data_path = self.exp_dir / "datasets_noisy"
             os.makedirs(self.noisy_data_path, exist_ok=True)
             for f in self.data_path.glob("*.zip"):
@@ -108,7 +109,7 @@ class RetrievalExperiment:
             for model_name in self.model_names:
                 os.makedirs(self.embeddings_path / model_name / dataset_name, exist_ok=True)
 
-        self.statistics = statistics if len(self.model_names) > 0 else False
+        self.statistics = statistics if len(self.model_names) > 1 else False
         self.results_buffer = {model_name: {} for model_name in self.model_names}
         self.experiment_metadata = {
             'timestamp': time.asctime(),
@@ -126,6 +127,8 @@ class RetrievalExperiment:
                 model_name, (model_path, trust_remote) = model
                 try:
                     dataset_dir = self.data_path / dataset
+                    if self.noise > 0:
+                        dataset_dir = self.noisy_data_path / dataset
                     embbedings_dir = self.embeddings_path / model_name / dataset
                     results, full_average, full_per_query = RetrievalExperiment._evaluate_model_on_dataset(model_name, 
                                                         model_path, 
