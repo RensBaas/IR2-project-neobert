@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from transformers import AutoModel, AutoTokenizer
+from access import TOKEN
 
 def remove_identical_ids(results):
     popped = []
@@ -183,8 +184,8 @@ output_all_score, merged_query_level_scores = calculate_retrieval_metrics(
 class CLSBiEncoder:
     def __init__(self, model_path, trust_remote_code=False, batch_size=64):
         print(f"Initializing encoder for {model_path}", flush=True)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=trust_remote_code, local_files_only=True)
-        self.model = AutoModel.from_pretrained(model_path, trust_remote_code=trust_remote_code, local_files_only=True)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=trust_remote_code, token=TOKEN)
+        self.model = AutoModel.from_pretrained(model_path, trust_remote_code=trust_remote_code, token=TOKEN)
         self.model.eval()
         self.batch_size = batch_size
 
