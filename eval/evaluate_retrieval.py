@@ -125,21 +125,21 @@ class RetrievalExperiment:
         for dataset in self.datasets:
             for model in self.models.items():
                 model_name, (model_path, trust_remote) = model
-                try:
-                    dataset_dir = self.data_path / dataset
-                    if self.noise > 0:
-                        dataset_dir = self.noisy_data_path / dataset
-                    embbedings_dir = self.embeddings_path / model_name / dataset
-                    results, full_average, full_per_query = RetrievalExperiment._evaluate_model_on_dataset(model_name, 
-                                                        model_path, 
-                                                        dataset_dir, 
-                                                        embbedings_dir, 
-                                                        trust_remote)
-                    self._save_round_results(model_name, dataset, full_average, full_per_query)
-                    self.results_buffer[model_name][dataset] = results
-                except Exception as e:
-                    print(f"Error evaluating {model_name} on {dataset}: {str(e)}")
-                    self.results_buffer[model_name][dataset] = None
+                # try:
+                dataset_dir = self.data_path / dataset
+                if self.noise > 0:
+                    dataset_dir = self.noisy_data_path / dataset
+                embbedings_dir = self.embeddings_path / model_name / dataset
+                results, full_average, full_per_query = RetrievalExperiment._evaluate_model_on_dataset(model_name, 
+                                                    model_path, 
+                                                    dataset_dir, 
+                                                    embbedings_dir, 
+                                                    trust_remote)
+                self._save_round_results(model_name, dataset, full_average, full_per_query)
+                self.results_buffer[model_name][dataset] = results
+                # except Exception as e:
+                #     print(f"Error evaluating {model_name} on {dataset}: {str(e)}")
+                #     self.results_buffer[model_name][dataset] = None
 
         self._save_results()
 
