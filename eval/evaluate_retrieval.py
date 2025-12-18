@@ -66,6 +66,7 @@ class RetrievalExperiment:
         self.datasets = datasets
         self.beir = len(set(self.datasets).intersection(set(BEIR))) > 0
         self.bright = len(set(self.datasets).intersection(set(BRIGHT))) > 0
+        self.toxir = len(set(self.datasets).intersection(set(TOXIR))) > 0
         self.in_domain = MSMARCO in self.datasets
 
         for dataset_name in self.datasets:
@@ -157,7 +158,7 @@ class RetrievalExperiment:
                        indent=2)
         
     def _save_results(self):
-        beir_buffer, bright_buffer, msmarco_buffer = dict(), dict(), dict()
+        beir_buffer, bright_buffer, msmarco_buffer, toxir_buffer = dict(), dict(), dict(), dict()
         for model, datasets in self.results_buffer.items():
             for dataset, results in datasets.items():
                 if dataset in BEIR:
@@ -166,6 +167,8 @@ class RetrievalExperiment:
                     bright_buffer.setdefault(model, {})[dataset] = results
                 elif dataset == MSMARCO:
                     msmarco_buffer.setdefault(model, {})[dataset] = results
+                elif dataset in TOXIR:
+                    toxir_buffer.setdefault(model, {})[dataset] = results
 
         data = dict()
         data['metadata'] = self.experiment_metadata
@@ -173,6 +176,8 @@ class RetrievalExperiment:
             data['beir_results'] = beir_buffer
         if self.bright:
             data['bright_results'] = bright_buffer
+        if self.toxir:
+            data['toxir_results'] = toxir_buffer
         if self.in_domain:
             data['msmarco_results'] = msmarco_buffer
 
