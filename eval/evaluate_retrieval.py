@@ -31,6 +31,7 @@ BEIR = ["trec-covid","nfcorpus","nq","hotpotqa","fiqa","arguana","webis-touche20
         "scidocs","fever","climate-fever","scifact"]
 BRIGHT = ["biology","earth_science","economics","psychology","robotics","stackoverflow","sustainable_living",
           "leetcode","pony","aops","theoremqa_questions","theoremqa_theorems"]
+TOXIR = ['misogyny']
 
 logging.basicConfig(
     format="%(asctime)s - %(message)s",
@@ -69,13 +70,11 @@ class RetrievalExperiment:
 
         for dataset_name in self.datasets:
             if dataset_name in BEIR or dataset_name == MSMARCO:
-                if dataset_name == MSMARCO:
-                    shutil.copytree('/Users/ori/Downloads/msmarco', self.data_path / "msmarco", dirs_exist_ok=True)
-                    continue
-
                 url = f"https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/{dataset_name}.zip"
             elif dataset_name in BRIGHT:
                 url = f"https://github.com/liyongkang123/extended_beir_datasets/releases/download/beir_v1.0/{dataset_name}.zip"
+            elif dataset_name in TOXIR:
+                url = f"https://github.com/o-brand/toxir/releases/download/v1/{dataset_name}.zip"
             else:
                 print(f'{dataset_name} is not a known dataset. Removing {dataset_name} from evaluation.')
                 self.datasets.pop(dataset_name)
